@@ -211,3 +211,13 @@ def update_job_status(job_id: str, status: str) -> None:
 def delete_job(job_id: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+
+
+def bootstrap_admin(username: str, password_hash: str) -> None:
+    """Concurrent starts must neither duplicate accounts nor overwrite credentials."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users(username,password_hash,role,created_at) "
+            "VALUES (?,?,'admin',CURRENT_TIMESTAMP) ON CONFLICT(username) DO NOTHING",
+            (username, password_hash),
+        )

@@ -8,12 +8,12 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import hashlib
+import jwt
 
 from backend import config, database
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
@@ -22,11 +22,16 @@ _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 # ---------------------------------------------------------------------------
 
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    digest = hashlib.sha256(plain.encode()).hexdigest().encode()
+    return "sha256:" + bcrypt.hashpw(digest, bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    if hashed.startswith("sha256:"):
+        digest = hashlib.sha256(plain.encode()).hexdigest().encode()
+        return bcrypt.checkpw(digest, hashed[7:].encode())
+    # Existing passlib bcrypt hashes used the first 72 UTF-8 bytes.
+    return bcrypt.checkpw(plain.encode()[:72], hashed.encode())
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +52,7 @@ def create_access_token(user_id: int, role: str) -> str:
 def _decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, config.SECRET_KEY, algorithms=[config.ALGORITHM])
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",

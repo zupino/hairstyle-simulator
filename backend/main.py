@@ -36,6 +36,14 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"Unsupported BFL_MODEL. Choose one of {config.MODELS}")
     logger.info("BFL image editor: %s", config.BFL_MODEL)
     database.init_db()
+    password = os.getenv("ADMIN_PASSWORD")
+    if password:
+        from backend.auth import hash_password
+        username = os.getenv("ADMIN_USERNAME", "admin")
+        if len(password) < 8:
+            raise RuntimeError("ADMIN_PASSWORD must contain at least eight characters")
+        if database.get_user_by_username(username) is None:
+            database.bootstrap_admin(username, hash_password(password))
     yield
 
 
