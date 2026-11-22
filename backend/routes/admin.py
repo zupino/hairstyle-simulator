@@ -3,6 +3,9 @@ Admin-only endpoints for operator management and hairstyle uploads.
 All routes require a valid JWT with role='admin'.
 """
 
+from pathlib import Path
+from fastapi.responses import Response
+from services.face import cover_reference
 import logging
 import os
 import uuid
@@ -78,10 +81,23 @@ async def delete_operator(operator_id: int, admin=Depends(require_admin)):
 # Hairstyle management
 # ---------------------------------------------------------------------------
 
+def covered_bytes(image):
+    try:
+        return jpeg(cover_reference(image))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/hairstyles/cover-preview")
+async def preview_cover(file: Annotated[UploadFile, File()], admin=Depends(require_admin)):
+    return Response(covered_bytes(await read_image(file)), media_type="image/jpeg")
+
+
 @router.post("/hairstyles", response_model=HairstyleOut, status_code=status.HTTP_201_CREATED)
 async def upload_hairstyle(
     name: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
+    cover_face: Annotated[bool, Form()] = False,
     admin=Depends(require_admin),
 ):
     if file.content_type not in _ALLOWED_IMAGE_CONTENT_TYPES:
@@ -94,6 +110,9 @@ async def upload_hairstyle(
     dest_path = os.path.join(config.STORAGE_PATH, filename)
     os.makedirs(config.STORAGE_PATH, exist_ok=True)
     image = await read_image(file)
+    covered = covered_bytes(image) if cover_face else None
+    if covered:
+        Path(dest_path).with_suffix(".covered.jpg").write_bytes(covered)
     with open(dest_path, "wb") as fh:
         fh.write(jpeg(image))
     description = None
@@ -125,4 +144,5 @@ async def delete_hairstyle(hairstyle_id: int, admin=Depends(require_admin)):
     if os.path.exists(file_path):
         os.remove(file_path)
 
+    Path(file_path).with_suffix(".covered.jpg").unlink(missing_ok=True)
     database.delete_hairstyle(hairstyle_id)

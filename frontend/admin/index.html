@@ -184,6 +184,8 @@
             <label for="hs-file">Image (JPEG / PNG / WebP)</label>
             <input id="hs-file" type="file" accept="image/jpeg,image/png,image/webp" />
           </div>
+          <label><input type="checkbox" id="cover-face"> Cover reference face</label>
+          <img id="cover-preview" alt="Prepared reference" hidden width="140">
           <button class="btn btn-primary" id="hs-upload-btn">Upload</button>
         </div>
       </div>
@@ -341,7 +343,7 @@
         const item = document.createElement('div');
         item.className = 'hairstyle-item';
         item.innerHTML = `
-          <img src="/api/hairstyles/${hs.id}/image"
+          <img 
                alt="${esc(hs.name)}"
                loading="lazy"
                onerror="this.style.background='var(--bg)';this.removeAttribute('src')" />
@@ -350,6 +352,9 @@
             <button class="btn btn-danger" style="padding:4px 10px;font-size:.8rem"
                     data-id="${hs.id}">Del</button>
           </div>`;
+        fetch('/api/hairstyles/' + hs.id + '/image', {headers: {Authorization: 'Bearer ' + token}})
+          .then(r => r.ok ? r.blob() : Promise.reject()).then(b => item.querySelector('img').src = URL.createObjectURL(b)).catch(() => {});
+        item.querySelector('button').hidden = hs.id < 0;
         item.querySelector('button').addEventListener('click', () => deleteHairstyle(hs.id, item));
         grid.appendChild(item);
       });
@@ -357,6 +362,35 @@
       grid.innerHTML = '<p style="color:var(--danger)">' + esc(err.message) + '</p>';
     }
   }
+
+  let coverRevision = 0;
+  async function refreshCover() {
+    const revision = ++coverRevision;
+    const image = document.getElementById('cover-preview');
+    const upload = document.getElementById('hs-upload-btn');
+    URL.revokeObjectURL(image.src);
+    image.hidden = true;
+    upload.disabled = false;
+    const file = document.getElementById('hs-file').files[0];
+    if (!file || !document.getElementById('cover-face').checked) return;
+    upload.disabled = true;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch('/api/admin/hairstyles/cover-preview', {
+        method: 'POST', headers: {Authorization: 'Bearer ' + token}, body: form
+      });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const blob = await res.blob();
+      if (revision !== coverRevision) return;
+      image.src = URL.createObjectURL(blob);
+      image.hidden = false;
+      upload.disabled = false;
+    } catch (e) {
+      if (revision === coverRevision) showAlert('upload-alert', e.message, 'error');
+    }
+  }
+  for (const id of ['hs-file', 'cover-face']) document.getElementById(id).onchange = refreshCover;
 
   async function uploadHairstyle() {
     const name = document.getElementById('hs-name').value.trim();
@@ -366,12 +400,15 @@
     if (!fileInput.files.length) { showAlert('upload-alert', 'Please select an image', 'error'); return; }
     const fd = new FormData();
     fd.append('name', name);
+    fd.append('cover_face', document.getElementById('cover-face').checked);
     fd.append('file', fileInput.files[0]);
     try {
       await api('POST', '/api/admin/hairstyles', fd, true);
       showAlert('upload-alert', 'Hairstyle uploaded successfully', 'success');
       document.getElementById('hs-name').value = '';
       fileInput.value = '';
+      document.getElementById('cover-face').checked = false;
+      refreshCover();
       loadHairstyles();
     } catch (err) {
       showAlert('upload-alert', err.message, 'error');

@@ -7,7 +7,8 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import JSONResponse, Response
-from backend import config, database
+from backend import database
+from services import catalogue
 from backend.auth import require_operator_or_admin
 from backend.models import GenerateResponse
 from services.image import read_image, jpeg, encoded
@@ -24,10 +25,10 @@ async def submit_job(
     colour: Annotated[str, Form(max_length=64)] = "original",
     user=Depends(require_operator_or_admin),
 ):
-    style = database.get_hairstyle(hairstyle_id)
+    style = catalogue.get(hairstyle_id)
     if style is None:
         raise HTTPException(404, "Hairstyle not found")
-    reference = encoded((Path(config.STORAGE_PATH) / style["filename"]).read_bytes())
+    reference = encoded(catalogue.path(style, prepared=True).read_bytes())
     brief = "Copy only the haircut, texture and silhouette in image 2."
     colour = {"original": "keep the colour from image 1", "reference": "match image 2"}.get(colour, colour)
     image = await read_image(selfie)

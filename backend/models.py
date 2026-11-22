@@ -44,8 +44,8 @@ class HairstyleOut(BaseModel):
     id: int
     name: str
     filename: str
-    uploaded_by: int
-    created_at: str
+    uploaded_by: int | None
+    created_at: str | None
     description: Optional[str] = None
 
 
