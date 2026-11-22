@@ -14,8 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from backend import config, database
 from backend.auth import require_admin, hash_password
 from backend.models import OperatorCreate, OperatorUpdate, OperatorOut, HairstyleOut
-from services.image import stamp_hairstyle_label
-from services.describe import describe_hairstyle
+from services.image import read_image, jpeg
 
 logger = logging.getLogger(__name__)
 
@@ -91,25 +90,13 @@ async def upload_hairstyle(
             detail=f"Unsupported image type: {file.content_type}. Use JPEG, PNG, or WebP.",
         )
 
-    # Always store as PNG after stamping the label overlay.
-    filename = f"{uuid.uuid4().hex}.png"
+    filename = f"{uuid.uuid4().hex}.jpg"
     dest_path = os.path.join(config.STORAGE_PATH, filename)
-
     os.makedirs(config.STORAGE_PATH, exist_ok=True)
-    raw_contents = await file.read()
-    stamped_contents = stamp_hairstyle_label(raw_contents, name)
+    image = await read_image(file)
     with open(dest_path, "wb") as fh:
-        fh.write(stamped_contents)
-
-    # Generate a hairstyle description from the original (un-stamped) image.
-    # If the description call fails the upload still succeeds; generation will
-    # fall back to using the hairstyle name in the prompt.
-    description: str | None = None
-    try:
-        description = await describe_hairstyle(raw_contents)
-    except Exception as exc:
-        logger.warning("Hairstyle description failed, storing without description: %s", exc)
-
+        fh.write(jpeg(image))
+    description = None
     now = _now()
     hairstyle_id = database.create_hairstyle(
         name=name,

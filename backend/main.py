@@ -30,42 +30,13 @@ _FRONTEND_OPERATOR = os.path.join(_BASE_DIR, "frontend", "operator")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Log the active generation backend so it is immediately visible in the
-    # server output and cannot be confused with a different configuration.
-    _log_active_backend()
-
-    # Validate config and warn loudly about any problems.
-    errors = config.validate()
-    if errors:
-        for msg in errors:
-            logger.warning("CONFIG: %s", msg)
-        logger.warning(
-            "Image generation will not work until the above issues are resolved."
-        )
-
+    if not config.SECRET_KEY or not config.BFL_API_KEY:
+        raise RuntimeError("Set SECRET_KEY and BFL_API_KEY before starting the app")
+    if config.BFL_MODEL not in config.MODELS:
+        raise RuntimeError(f"Unsupported BFL_MODEL. Choose one of {config.MODELS}")
+    logger.info("BFL image editor: %s", config.BFL_MODEL)
     database.init_db()
     yield
-
-
-def _log_active_backend() -> None:
-    backend = config.GENERATION_BACKEND
-    if backend == "bfl_fill":
-        logger.info(
-            "Generation backend: bfl_fill  (model=%s, mask_strategy=%s)",
-            config.BFL_FILL_MODEL,
-            config.MASK_STRATEGY,
-        )
-    elif backend == "bfl_standard":
-        logger.info(
-            "Generation backend: bfl_standard  (model=%s)",
-            config.BFL_MODEL,
-        )
-    else:
-        logger.error(
-            "Generation backend: UNKNOWN value %r — set GENERATION_BACKEND to "
-            "one of: bfl_fill, bfl_standard",
-            backend,
-        )
 
 
 app = FastAPI(
