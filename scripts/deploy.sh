@@ -12,7 +12,8 @@ fi
 
 # gcloud supports a custom dictionary separator. Choose one absent from every
 # value so passwords can include commas, spaces and shell punctuation.
-settings=("BFL_API_KEY=$BFL_API_KEY" "SECRET_KEY=$SECRET_KEY" "ADMIN_PASSWORD=$ADMIN_PASSWORD")
+# Distinct runtime names avoid a type collision while gcloud removes old secret bindings.
+settings=("SALON_BFL_API_KEY=$BFL_API_KEY" "SALON_SECRET_KEY=$SECRET_KEY" "SALON_ADMIN_PASSWORD=$ADMIN_PASSWORD")
 for name in BFL_MODEL ADMIN_USERNAME ACCESS_TOKEN_TTL DB_PATH STORAGE_PATH; do
   if [[ -n ${!name:-} ]]; then settings+=("$name=${!name}"); fi
 done
@@ -23,4 +24,5 @@ for setting in "${settings[@]:1}"; do runtime_vars+="$separator$setting"; done
 
 exec gcloud run deploy hairstyle-simulator --source . --region europe-west3 \
   --min-instances 0 --max-instances 1 --allow-unauthenticated \
+  --remove-secrets=BFL_API_KEY,SECRET_KEY,ADMIN_PASSWORD \
   --set-env-vars "$runtime_vars" "$@"

@@ -27,11 +27,7 @@ Export your existing `BFL_API_KEY`, `SECRET_KEY` and `ADMIN_PASSWORD` in your sh
 
 The script uses `gcloud run deploy --set-env-vars`. It replaces the service’s runtime environment variable list with the three required values and any optional app settings exported from the table below. Cloud Run stores these as ordinary revision configuration visible to users with permission to inspect the service. Set `BFL_MODEL=flux-3-image` in the environment to try FLUX 3; the application defaults to FLUX.2 Pro.
 
-If an earlier revision already binds the three names to Secret Manager, use the following once to remove those bindings in the same deployment. A failed initial setup with no bindings can use the normal command above.
-
-```sh
-./scripts/deploy.sh --remove-secrets=BFL_API_KEY,SECRET_KEY,ADMIN_PASSWORD
-```
+Keep exporting the original names on your machine. The script sends the three credentials as literal variables named `SALON_BFL_API_KEY`, `SALON_SECRET_KEY`, and `SALON_ADMIN_PASSWORD` on Cloud Run. In the same deployment it removes any Secret Manager bindings under the original three names. This works for both a first deployment and migration of an existing service. The secret entries in Secret Manager are untouched.
 
 The service is publicly reachable, with app login protecting salon APIs. The demo uses per-instance SQLite and files. Cold starts restore the four bundled styles and bootstrap admin. Added references, operators and pending jobs can disappear on instance replacement. Keep the demo at one instance to limit cross-instance state mismatches; durable multi-instance operation would require shared storage.
 

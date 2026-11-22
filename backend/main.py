@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"Unsupported BFL_MODEL. Choose one of {config.MODELS}")
     logger.info("BFL image editor: %s", config.BFL_MODEL)
     database.init_db()
-    password = os.getenv("ADMIN_PASSWORD")
+    password = config.credential("ADMIN_PASSWORD")
     if password:
         from backend.auth import hash_password
         username = os.getenv("ADMIN_USERNAME", "admin")
