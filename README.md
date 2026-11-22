@@ -17,12 +17,20 @@ Open http://localhost:8080/ for the operator and /admin/ for catalogue and opera
 
 ## Cloud Run demo
 
-Deploy from source with the included Dockerfile from the repository root. It selects CPython 3.12 on Debian and installs binary wheels only. The Procfile supplies the equivalent service command for a buildpack deployment. Store the three secrets in Secret Manager and grant the runtime service account access. Example using existing secrets named bfl-api-key, salon-jwt and salon-admin:
+Deploy from the repository root using Google Cloud buildpacks. The root `.python-version` selects Python 3.12, `requirements.txt` requires binary wheels, and the Procfile starts Uvicorn on the Cloud Run port.
+
+Export your existing `BFL_API_KEY`, `SECRET_KEY` and `ADMIN_PASSWORD` in your shell. Keep the same signing secret across deployments. To generate one on first setup, run `export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"`.
 
 ```sh
-gcloud run deploy hairstyle-simulator --source . --region europe-west3 \
-  --min-instances 0 --max-instances 1 --allow-unauthenticated \
-  --set-secrets BFL_API_KEY=bfl-api-key:latest,SECRET_KEY=salon-jwt:latest,ADMIN_PASSWORD=salon-admin:latest
+./scripts/deploy.sh
+```
+
+The script uses `gcloud run deploy --set-env-vars`. It replaces the service’s runtime environment variable list with the three required values and any optional app settings exported from the table below. Cloud Run stores these as ordinary revision configuration visible to users with permission to inspect the service. Set `BFL_MODEL=flux-3-image` in the environment to try FLUX 3; the application defaults to FLUX.2 Pro.
+
+If an earlier revision already binds the three names to Secret Manager, use the following once to remove those bindings in the same deployment. A failed initial setup with no bindings can use the normal command above.
+
+```sh
+./scripts/deploy.sh --remove-secrets=BFL_API_KEY,SECRET_KEY,ADMIN_PASSWORD
 ```
 
 The service is publicly reachable, with app login protecting salon APIs. The demo uses per-instance SQLite and files. Cold starts restore the four bundled styles and bootstrap admin. Added references, operators and pending jobs can disappear on instance replacement. Keep the demo at one instance to limit cross-instance state mismatches; durable multi-instance operation would require shared storage.
@@ -37,7 +45,7 @@ The service is publicly reachable, with app login protecting salon APIs. The dem
 | DB_PATH | SQLite path, default `./hairstyle_simulator.db` |
 | STORAGE_PATH | Additional uploads, default `./storage/hairstyles` |
 | ACCESS_TOKEN_TTL | Login lifetime in seconds, default 3600 |
-| PORT | Cloud Run supplies the listening port; local container default 8080 |
+| PORT | Cloud Run supplies the listening port; Procfile fallback 8080 |
 
 For manual bootstrap use `python scripts/create_admin.py --username admin --password …`. Existing SQLite catalogue IDs and legacy bcrypt passwords remain usable.
 
