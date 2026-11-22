@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hairstyle Simulator — Operator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --primary: #7c3aed;
+      --primary-hover: #6d28d9;
+      --success: #059669;
+      --danger: #dc2626;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --radius: 8px;
+    }
+
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ---- Login ---- */
+    #login-screen {
+      display: flex; align-items: center; justify-content: center; min-height: 100vh;
+    }
+    .login-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px; width: 340px;
+    }
+    .login-box h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .login-box p { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    label { font-size: .85rem; color: var(--muted); font-weight: 500; }
+    input[type=text], input[type=password] {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: var(--radius); font-size: .95rem;
+    }
+    input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+    /* ---- App shell ---- */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+    header {
+      background: var(--primary); color: #fff; padding: 12px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    #logout-btn {
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      padding: 6px 14px; border-radius: var(--radius); cursor: pointer;
+    }
+
+    main {
+      flex: 1; display: grid; gap: 20px; padding: 20px;
+      grid-template-columns: 1fr 1fr;
+      max-width: 1100px; margin: 0 auto; width: 100%;
+    }
+    @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+
+    /* ---- cards ---- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px;
+    }
+    .card h2 { font-size: .95rem; font-weight: 600; margin-bottom: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+    /* ---- webcam ---- */
+    .camera-wrap {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      background: #000; aspect-ratio: 1/1; max-width: 420px; margin: 0 auto;
+    }
+    #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Oval guide overlay */
+    .oval-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .oval-overlay svg { width: 70%; height: 85%; }
+    .oval-overlay ellipse {
+      fill: none; stroke: rgba(255,255,255,.7);
+      stroke-width: 3; stroke-dasharray: 10 6;
+    }
+    .oval-overlay .oval-label {
+      fill: rgba(255,255,255,.8); font-size: 14px; font-family: system-ui;
+      text-anchor: middle;
+    }
+
+    .camera-actions { display: flex; gap: 10px; margin-top: 12px; }
+
+    /* ---- selfie capture strip ---- */
+    #selfie-strip {
+      margin-top: 10px; max-width: 420px; margin-left: auto; margin-right: auto;
+    }
+    #selfie-scroll {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    #selfie-scroll::-webkit-scrollbar { height: 4px; }
+    #selfie-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .selfie-thumb {
+      flex: 0 0 72px; border: 2px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; cursor: pointer; transition: border-color .15s;
+    }
+    .selfie-thumb.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-hover); }
+    .selfie-thumb img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
+
+    /* ---- hairstyle strip (full-width, between header and main) ---- */
+    #hairstyle-strip {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+    }
+    #hairstyle-strip h2 {
+      font-size: .75rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+    }
+    #hairstyle-scroll {
+      display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    #hairstyle-scroll::-webkit-scrollbar { height: 4px; }
+    #hairstyle-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .hs-thumb {
+      flex: 0 0 100px; border: 2px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; cursor: pointer; transition: border-color .15s;
+    }
+    .hs-thumb.selected { border-color: var(--primary); }
+    .hs-thumb img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
+    .hs-thumb-name {
+      padding: 4px 6px; font-size: .75rem; text-align: center;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ---- result ---- */
+    #result-card { display: none; }
+    #result-img { width: 100%; border-radius: var(--radius); display: block; }
+    .result-actions { display: flex; gap: 10px; margin-top: 10px; }
+
+    /* ---- buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 18px; border: none; border-radius: var(--radius);
+      font-size: .9rem; cursor: pointer; font-weight: 500;
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); }
+
+    /* ---- alerts ---- */
+    .alert { padding: 10px 14px; border-radius: var(--radius); font-size: .9rem; margin-top: 10px; }
+    .alert-error { background: #fef2f2; color: var(--danger); }
+    .alert-info { background: #eff6ff; color: #1d4ed8; }
+
+    /* ---- status bar ---- */
+    #status-bar { padding: 8px 14px; font-size: .85rem; text-align: center; min-height: 36px; }
+
+    .spinner {
+      display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border);
+      border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>Hairstyle Simulator</h1>
+    <p>Operator portal — sign in to continue</p>
+    <div id="login-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label for="login-username">Username</label>
+      <input id="login-username" type="text" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" />
+    </div>
+    <button class="btn btn-primary" id="login-btn" style="width:100%;margin-top:4px">Sign in</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <header>
+    <h1>Hairstyle Simulator</h1>
+    <button id="logout-btn">Sign out</button>
+  </header>
+
+  <div id="hairstyle-strip">
+    <h2>Select hairstyle</h2>
+    <div id="hairstyle-scroll">
+      <p style="color:var(--muted);font-size:.9rem;white-space:nowrap">Loading…</p>
+    </div>
+  </div>
+
+  <main>
+    <!-- LEFT: Camera + hairstyle picker -->
+    <div>
+      <!-- Camera -->
+      <div class="card">
+        <h2>Capture selfie</h2>
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="oval-overlay">
+            <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="100" cy="110" rx="72" ry="95" />
+              <text class="oval-label" x="100" y="228">Align face inside oval</text>
+            </svg>
+          </div>
+        </div>
+        <!-- hidden canvas used only for capturing frames -->
+        <canvas id="capture-canvas" style="display:none"></canvas>
+        <div class="camera-actions">
+          <button class="btn btn-primary" id="capture-btn">Capture</button>
+        </div>
+        <!-- selfie strip: shown after first capture -->
+        <div id="selfie-strip" class="hidden">
+          <div id="selfie-scroll"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Generate + result -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <h2>Generate</h2>
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:12px">
+          Capture a selfie and select a hairstyle, then click Generate.
+        </p>
+        <button class="btn btn-primary" id="generate-btn" disabled>Generate</button>
+        <div id="status-bar"></div>
+      </div>
+
+      <div class="card" id="result-card">
+        <h2>Result</h2>
+        <img id="result-img" src="" alt="Generated hairstyle" />
+        <div class="result-actions">
+          <a id="download-btn" class="btn btn-success" download="hairstyle-result.jpg">Save image</a>
+          <button class="btn btn-outline" id="new-session-btn">New session</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  'use strict';
+
+  // -----------------------------------------------------------------------
+  // State
+  // -----------------------------------------------------------------------
+  let token = sessionStorage.getItem('operator_token') || null;
+  let capturedBlobs = [];
+  let selectedSelfieBlob = null;
+  let selectedHairstyleId = null;
+  let pollTimer = null;
+
+  // -----------------------------------------------------------------------
+  // API
+  // -----------------------------------------------------------------------
+  async function api(method, path, body, isForm) {
+    const opts = { method, headers: {} };
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (body) {
+      if (isForm) {
+        opts.body = body;
+      } else {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+    }
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || res.statusText);
+    }
+    return res;
+  }
+
+  // -----------------------------------------------------------------------
+  // Auth
+  // -----------------------------------------------------------------------
+  async function login() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.classList.add('hidden');
+    try {
+      const fd = new URLSearchParams();
+      fd.append('username', username);
+      fd.append('password', password);
+      const res = await fetch('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      token = data.access_token;
+      sessionStorage.setItem('operator_token', token);
+      showApp();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  function logout() {
+    token = null;
+    sessionStorage.removeItem('operator_token');
+    stopPoll();
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    stopCamera();
+  }
+
+  // -----------------------------------------------------------------------
+  // App init
+  // -----------------------------------------------------------------------
+  function showApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    startCamera();
+    loadHairstyles();
+  }
+
+  // -----------------------------------------------------------------------
+  // Camera
+  // -----------------------------------------------------------------------
+  let videoStream = null;
+
+  async function startCamera() {
+    const video = document.getElementById('video');
+    try {
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1024 }, height: { ideal: 1024 } },
+        audio: false,
+      });
+      video.srcObject = videoStream;
+    } catch (err) {
+      setStatus('Camera not available: ' + err.message, 'error');
+    }
+  }
+
+  function stopCamera() {
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+  }
+
+  function capturePhoto() {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('capture-canvas');
+    const side = Math.min(video.videoWidth, video.videoHeight);
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext('2d');
+    const xOff = (video.videoWidth - side) / 2;
+    const yOff = (video.videoHeight - side) / 2;
+    ctx.drawImage(video, xOff, yOff, side, side, 0, 0, side, side);
+    canvas.toBlob(blob => {
+      const index = capturedBlobs.length;
+      capturedBlobs.push(blob);
+      addSelfieThumb(blob, index);
+      selectSelfie(index);
+      document.getElementById('selfie-strip').classList.remove('hidden');
+    }, 'image/jpeg', 0.92);
+  }
+
+  function addSelfieThumb(blob, index) {
+    const scroll = document.getElementById('selfie-scroll');
+    const thumb = document.createElement('div');
+    thumb.className = 'selfie-thumb';
+    thumb.dataset.index = index;
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(blob);
+    img.alt = 'Selfie ' + (index + 1);
+    thumb.appendChild(img);
+    thumb.addEventListener('click', () => selectSelfie(index));
+    scroll.appendChild(thumb);
+    thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+  }
+
+  function selectSelfie(index) {
+    selectedSelfieBlob = capturedBlobs[index];
+    document.querySelectorAll('.selfie-thumb').forEach((t, i) => {
+      t.classList.toggle('selected', i === index);
+    });
+    updateGenerateBtn();
+  }
+
+  // -----------------------------------------------------------------------
+  // Hairstyle picker
+  // -----------------------------------------------------------------------
+  async function loadHairstyles() {
+    const scroll = document.getElementById('hairstyle-scroll');
+    try {
+      const res = await api('GET', '/api/hairstyles');
+      const list = await res.json();
+      if (!list.length) {
+        scroll.innerHTML = '<p style="color:var(--muted);font-size:.9rem;white-space:nowrap">No hairstyles available. Ask your admin to upload some.</p>';
+        return;
+      }
+      scroll.innerHTML = '';
+      list.forEach(hs => {
+        const item = document.createElement('div');
+        item.className = 'hs-thumb';
+        item.dataset.id = hs.id;
+
+        const img = document.createElement('img');
+        img.alt = hs.name;
+        img.loading = 'lazy';
+        api('GET', `/api/hairstyles/${hs.id}/image`)
+          .then(r => r.blob())
+          .then(blob => { img.src = URL.createObjectURL(blob); })
+          .catch(() => {});
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'hs-thumb-name';
+        nameDiv.title = hs.name;
+        nameDiv.textContent = hs.name;
+
+        item.appendChild(img);
+        item.appendChild(nameDiv);
+        item.addEventListener('click', () => selectHairstyle(hs.id, item));
+        scroll.appendChild(item);
+      });
+    } catch (err) {
+      scroll.innerHTML = '<p style="color:var(--danger);font-size:.9rem">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function selectHairstyle(id, el) {
+    document.querySelectorAll('.hs-thumb').forEach(t => t.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedHairstyleId = id;
+    updateGenerateBtn();
+  }
+
+  // -----------------------------------------------------------------------
+  // Generate
+  // -----------------------------------------------------------------------
+  function updateGenerateBtn() {
+    document.getElementById('generate-btn').disabled = !(selectedSelfieBlob && selectedHairstyleId);
+  }
+
+  async function startGeneration() {
+    setStatus('<span class="spinner"></span> Submitting…', 'info');
+    document.getElementById('generate-btn').disabled = true;
+    document.getElementById('result-card').style.display = 'none';
+
+    const fd = new FormData();
+    fd.append('selfie', selectedSelfieBlob, 'selfie.jpg');
+    fd.append('hairstyle_id', selectedHairstyleId);
+
+    try {
+      const res = await api('POST', '/api/generate', fd, true);
+      const data = await res.json();
+      pollJob(data.job_id);
+    } catch (err) {
+      setStatus('Error: ' + err.message, 'error');
+      document.getElementById('generate-btn').disabled = false;
+    }
+  }
+
+  function pollJob(jobId, attempt = 0) {
+    const MAX_ATTEMPTS = 620; // ~2 minutes at 1s intervals
+    if (attempt >= MAX_ATTEMPTS) {
+      setStatus('Timed out waiting for result', 'error');
+      document.getElementById('generate-btn').disabled = false;
+      return;
+    }
+    setStatus(`<span class="spinner"></span> Generating… (${attempt + 1})`, 'info');
+    pollTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/generate/' + jobId, {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (res.status === 202) {
+          pollJob(jobId, attempt + 1);
+          return;
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || res.statusText);
+        }
+        // Got the image
+        const blob = await res.blob();
+        showResult(blob);
+      } catch (err) {
+        setStatus('Error: ' + err.message, 'error');
+        document.getElementById('generate-btn').disabled = false;
+      }
+    }, 1000);
+  }
+
+  function stopPoll() {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  }
+
+  function showResult(blob) {
+    stopPoll();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('result-img');
+    img.src = url;
+    const dlBtn = document.getElementById('download-btn');
+    dlBtn.href = url;
+    document.getElementById('result-card').style.display = 'block';
+    setStatus('Done!', 'success');
+    document.getElementById('generate-btn').disabled = false;
+  }
+
+  function newSession() {
+    stopPoll();
+    capturedBlobs = [];
+    selectedSelfieBlob = null;
+    selectedHairstyleId = null;
+    document.getElementById('selfie-scroll').innerHTML = '';
+    document.getElementById('selfie-strip').classList.add('hidden');
+    document.querySelectorAll('.hs-thumb').forEach(t => t.classList.remove('selected'));
+    document.getElementById('result-card').style.display = 'none';
+    setStatus('', '');
+    updateGenerateBtn();
+  }
+
+  // -----------------------------------------------------------------------
+  // Status helpers
+  // -----------------------------------------------------------------------
+  function setStatus(html, type) {
+    const bar = document.getElementById('status-bar');
+    bar.innerHTML = html;
+    bar.className = '';
+    if (type === 'error') bar.classList.add('alert', 'alert-error');
+    else if (type === 'info') bar.classList.add('alert', 'alert-info');
+  }
+
+  // -----------------------------------------------------------------------
+  // Utility
+  // -----------------------------------------------------------------------
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // -----------------------------------------------------------------------
+  // Event wiring
+  // -----------------------------------------------------------------------
+  document.getElementById('login-btn').addEventListener('click', login);
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+  });
+  document.getElementById('logout-btn').addEventListener('click', logout);
+  document.getElementById('capture-btn').addEventListener('click', capturePhoto);
+  document.getElementById('generate-btn').addEventListener('click', startGeneration);
+  document.getElementById('new-session-btn').addEventListener('click', newSession);
+
+  // -----------------------------------------------------------------------
+  // Auto-login if token in session storage
+  // -----------------------------------------------------------------------
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 > Date.now()) {
+        showApp();
+      } else {
+        logout();
+      }
+    } catch {
+      logout();
+    }
+  }
+</script>
+</body>
+</html>
