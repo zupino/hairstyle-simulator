@@ -38,11 +38,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 # JWT utilities
 # ---------------------------------------------------------------------------
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user) -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": str(user_id),
-        "role": role,
+        "sub": str(user["id"]),
+        "account": hashlib.sha256(user["password_hash"].encode()).hexdigest(),
         "iat": now,
         "exp": now + timedelta(seconds=config.ACCESS_TOKEN_TTL),
     }
@@ -68,7 +68,8 @@ def _get_current_user(token: Annotated[str, Depends(_oauth2_scheme)]):
     payload = _decode_token(token)
     user_id = int(payload["sub"])
     user = database.get_user_by_id(user_id)
-    if user is None or not user["is_active"]:
+    if (user is None or not user["is_active"] or
+            payload.get("account") != hashlib.sha256(user["password_hash"].encode()).hexdigest()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User inactive or not found")
     return user
 

@@ -52,3 +52,5 @@ For manual bootstrap use `python scripts/create_admin.py --username admin --pass
 The four generated mannequin photographs under assets/hairstyles ship with every instance. No runtime image download or database seeding is required. The app uses wheel-bundled OpenCV cascades and has no MediaPipe model download or compiler requirement.
 
 [BFL image editor API](https://docs.bfl.ml/api-reference/utility/generate-an-image-with-flux-3)
+
+Run the integration checks with `python -m unittest discover -s tests`. They mock BFL and incur no generation charges.

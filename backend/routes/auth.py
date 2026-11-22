@@ -28,5 +28,5 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
-    token = create_access_token(user["id"], user["role"])
+    token = create_access_token(user)
     return TokenResponse(access_token=token)

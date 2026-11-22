@@ -43,6 +43,11 @@ def suggest(image, prefs):
     results = []
     for name, shape in candidates:
         details = [shape, "Work with the existing natural texture."]
+        if effect == "unsure" and cue is not None:
+            if cue == "open":
+                details.append("Keep the front open around the eyes and begin framing below the cheekbones.")
+            else:
+                details.append("Sweep the front sections outward to open the area beside the eyes.")
         if effect in DETAILS:
             details.append(DETAILS[effect])
         if prefs.forehead_clear:

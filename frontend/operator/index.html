@@ -288,6 +288,12 @@
   let pollTimer = null;
   const el = id => document.getElementById(id);
   let revision = 0, session = 0, busy = false, look = '', lastSelfie = null;
+  const customerUrls = new Set();
+  function customerUrl(blob) {
+    const url = URL.createObjectURL(blob);
+    customerUrls.add(url);
+    return url;
+  }
   function invalidate() {
     revision++;
     el('options').replaceChildren();
@@ -343,7 +349,7 @@
     const area = el('comparisons');
     if (!area.children.length) {
       const original = document.createElement('img');
-      original.src = URL.createObjectURL(lastSelfie); original.alt = 'Original selfie';
+      original.src = customerUrl(lastSelfie); original.alt = 'Original selfie';
       const fig = document.createElement('figure'); fig.append(original, 'Original selfie'); area.append(fig);
     }
     if (area.children.length >= 3) area.children[1].remove();
@@ -476,7 +482,7 @@
     thumb.className = 'selfie-thumb';
     thumb.dataset.index = index;
     const img = document.createElement('img');
-    img.src = URL.createObjectURL(blob);
+    img.src = customerUrl(blob);
     img.alt = 'Selfie ' + (index + 1);
     thumb.appendChild(img);
     thumb.addEventListener('click', () => selectSelfie(index));
@@ -486,6 +492,10 @@
 
   function selectSelfie(index) {
     if (selectedSelfieBlob !== capturedBlobs[index]) {
+      session++;
+      stopPoll();
+      busy = false;
+      setStatus('', '');
       el('comparisons').replaceChildren();
       el('result-card').style.display = 'none';
     }
@@ -624,7 +634,7 @@
 
   function showResult(blob) {
     stopPoll();
-    const url = URL.createObjectURL(blob);
+    const url = customerUrl(blob);
     const img = document.getElementById('result-img');
     img.src = url;
     el('look-description').textContent = look;
@@ -639,6 +649,13 @@
   function newSession() {
     stopPoll();
     session++;
+    lastSelfie = null;
+    look = '';
+    el('look-description').textContent = '';
+    el('result-img').removeAttribute('src');
+    el('download-btn').removeAttribute('href');
+    for (const url of customerUrls) URL.revokeObjectURL(url);
+    customerUrls.clear();
     busy = false;
     el('comparisons').replaceChildren();
     for (const id of ['selfie-file','note','shade','brief']) el(id).value = '';

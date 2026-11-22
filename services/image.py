@@ -1,7 +1,6 @@
 """Normalize uploads once and preserve their framing and orientation."""
 import base64
 from io import BytesIO
-from pathlib import Path
 from PIL import Image, ImageOps
 from fastapi import HTTPException, UploadFile
 
