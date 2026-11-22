@@ -230,7 +230,7 @@
   // -----------------------------------------------------------------------
   // State
   // -----------------------------------------------------------------------
-  let token = sessionStorage.getItem('admin_token') || null;
+  let token = sessionStorage.getItem('operator_token') || sessionStorage.getItem('admin_token');
 
   // -----------------------------------------------------------------------
   // API helpers
@@ -259,6 +259,14 @@
   // -----------------------------------------------------------------------
   // Auth
   // -----------------------------------------------------------------------
+  async function verifyAdmin(candidate) {
+    const response = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + candidate } });
+    if (response.status === 401) throw new Error('Session expired. Please sign in again.');
+    if (!response.ok) throw new Error('Could not verify your session. Please try again.');
+    const account = await response.json();
+    if (account.role !== 'admin') throw new Error('Sign in with an admin account to manage hairstyles.');
+  }
+
   async function login() {
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
@@ -274,11 +282,9 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Login failed');
-      // Decode role from JWT payload
-      const payload = JSON.parse(atob(data.access_token.split('.')[1]));
-      if (payload.role !== 'admin') throw new Error('This portal is for admins only');
+      await verifyAdmin(data.access_token);
       token = data.access_token;
-      sessionStorage.setItem('admin_token', token);
+      sessionStorage.setItem('operator_token', token);
       showApp();
     } catch (err) {
       showAlert('login-error', err.message, 'error');
@@ -287,6 +293,7 @@
 
   function logout() {
     token = null;
+    sessionStorage.removeItem('operator_token');
     sessionStorage.removeItem('admin_token');
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
@@ -532,16 +539,11 @@
   // Auto-login if token in session storage
   // -----------------------------------------------------------------------
   if (token) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      if (payload.exp * 1000 > Date.now() && payload.role === 'admin') {
-        showApp();
-      } else {
-        logout();
-      }
-    } catch {
-      logout();
-    }
+    verifyAdmin(token).then(() => {
+      sessionStorage.setItem('operator_token', token);
+      sessionStorage.removeItem('admin_token');
+      showApp();
+    }).catch(err => showAlert('login-error', err.message, 'error'));
   }
 </script>
 </body>

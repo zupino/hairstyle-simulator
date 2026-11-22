@@ -414,6 +414,7 @@
     newSession();
     token = null;
     sessionStorage.removeItem('operator_token');
+    sessionStorage.removeItem('admin_token');
     stopPoll();
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
@@ -706,16 +707,9 @@
   // Auto-login if token in session storage
   // -----------------------------------------------------------------------
   if (token) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      if (payload.exp * 1000 > Date.now()) {
-        showApp();
-      } else {
-        logout();
-      }
-    } catch {
-      logout();
-    }
+    fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
+      .then(response => { if (response.ok) showApp(); else if (response.status === 401) logout(); })
+      .catch(() => {});
   }
 </script>
 </body>

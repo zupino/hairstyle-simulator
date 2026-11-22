@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import Depends
 
 from backend import database
-from backend.auth import verify_password, create_access_token
+from backend.auth import verify_password, create_access_token, require_active_user
 from backend.models import TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -30,3 +30,8 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
         )
     token = create_access_token(user)
     return TokenResponse(access_token=token)
+
+
+@router.get("/me")
+async def current_account(user=Depends(require_active_user)):
+    return {"username": user["username"], "role": user["role"]}

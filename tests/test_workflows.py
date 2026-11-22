@@ -28,6 +28,22 @@ class SalonWorkflows(unittest.TestCase):
         self.image = (catalogue.ASSETS / "blunt-bob.jpg").read_bytes()
         self.photo = {"selfie": ("selfie.jpg", self.image, "image/jpeg")}
 
+    def test_admin_session_and_catalogue_upload(self):
+        self.assertEqual(self.client.get("/api/auth/me").json()["role"], "admin")
+        files = {"file": ("bob.jpg", self.image, "image/jpeg")}
+        upload = self.client.post("/api/admin/hairstyles", data={"name": "Salon bob"}, files=files)
+        self.assertEqual(upload.status_code, 201)
+        style_id = upload.json()["id"]
+        self.assertIn(style_id, [s["id"] for s in self.client.get("/api/hairstyles").json()])
+        self.assertEqual(self.client.get(f"/api/hairstyles/{style_id}/image").status_code, 200)
+        credentials = {"username": "stylist", "password": "test-operator"}
+        self.assertEqual(self.client.post("/api/admin/operators", json=credentials).status_code, 201)
+        login = self.client.post("/api/auth/token", data=credentials)
+        self.client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
+        self.assertEqual(self.client.get("/api/auth/me").json()["role"], "operator")
+        denied = self.client.post("/api/admin/hairstyles", data={"name": "Another bob"}, files=files)
+        self.assertEqual(denied.status_code, 403)
+
     def test_catalogue_after_db_replacement(self):
         self.assertEqual(len(self.client.get("/api/hairstyles").json()), 4)
         Path(config.DB_PATH).unlink()
