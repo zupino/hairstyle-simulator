@@ -22,7 +22,7 @@ while [[ "${settings[*]}" == *"$separator"* ]]; do separator+="@"; done
 runtime_vars="^${separator}^${settings[0]}"
 for setting in "${settings[@]:1}"; do runtime_vars+="$separator$setting"; done
 
-exec gcloud run deploy hairstyle-simulator --source . --region europe-west3 \
+exec gcloud run deploy hairstyle-simulator --source . --region europe-west1 \
   --min-instances 0 --max-instances 1 --allow-unauthenticated \
   --remove-secrets=BFL_API_KEY,SECRET_KEY,ADMIN_PASSWORD \
   --set-env-vars "$runtime_vars" "$@"

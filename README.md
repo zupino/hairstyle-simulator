@@ -4,10 +4,10 @@ A salon operator can photograph or upload a selfie, try a catalogue cut or explo
 
 ## Run locally
 
-Use Python 3.12. Set BFL_API_KEY, SECRET_KEY and optionally ADMIN_PASSWORD in the shell before starting.
+Use Python 3.13. Set BFL_API_KEY, SECRET_KEY and optionally ADMIN_PASSWORD in the shell before starting.
 
 ```sh
-python3.12 -m venv .venv
+python3.13 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
 uvicorn backend.main:app --port 8080
@@ -17,7 +17,7 @@ Open http://localhost:8080/ for the operator and /admin/ for catalogue and opera
 
 ## Cloud Run demo
 
-Deploy from the repository root using Google Cloud buildpacks. The root `.python-version` selects Python 3.12, `requirements.txt` requires binary wheels, and the Procfile starts Uvicorn on the Cloud Run port.
+Deploy from the repository root using Google Cloud buildpacks. The root `.python-version` selects Python 3.13, `requirements.txt` requires binary wheels, and the Procfile starts Uvicorn on the Cloud Run port.
 
 Export your existing `BFL_API_KEY`, `SECRET_KEY` and `ADMIN_PASSWORD` in your shell. Keep the same signing secret across deployments. To generate one on first setup, run `export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"`.
 
@@ -28,6 +28,17 @@ Export your existing `BFL_API_KEY`, `SECRET_KEY` and `ADMIN_PASSWORD` in your sh
 The script uses `gcloud run deploy --set-env-vars`. It replaces the service’s runtime environment variable list with the three required values and any optional app settings exported from the table below. Cloud Run stores these as ordinary revision configuration visible to users with permission to inspect the service. Set `BFL_MODEL=flux-3-image` in the environment to try FLUX 3; the application defaults to FLUX.2 Pro.
 
 Keep exporting the original names on your machine. The script sends the three credentials as literal variables named `SALON_BFL_API_KEY`, `SALON_SECRET_KEY`, and `SALON_ADMIN_PASSWORD` on Cloud Run. In the same deployment it removes any Secret Manager bindings under the original three names. This works for both a first deployment and migration of an existing service. The secret entries in Secret Manager are untouched.
+
+### Switch models on the deployed service
+
+For the demo in Belgium, update the model with:
+
+```sh
+gcloud run services update hairstyle-simulator --region europe-west1 \
+  --update-env-vars=BFL_MODEL=flux-3-image
+```
+
+Cloud Run starts a new revision using the existing image. This changes only the model setting and requires no source build or manual restart. Use the region where your service actually runs (for an existing Frankfurt deployment, use `europe-west3`). Deploying the source in Belgium creates a separate regional service. To switch back, repeat with `flux-2-pro`. Export the desired `BFL_MODEL` before the next source deployment if you want to keep it.
 
 The service is publicly reachable, with app login protecting salon APIs. The demo uses per-instance SQLite and files. Cold starts restore the four bundled styles and bootstrap admin. Added references, operators and pending jobs can disappear on instance replacement. Keep the demo at one instance to limit cross-instance state mismatches; durable multi-instance operation would require shared storage.
 
