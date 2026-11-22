@@ -2,7 +2,9 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from typing import Literal
+from pydantic import ValidationError
+from services.consultation import Preferences, suggest
 from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
@@ -18,18 +20,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generation"])
 
 
+@router.post("/suggest")
+async def suggestions(selfie: Annotated[UploadFile, File()], preferences: Annotated[str, Form()],
+                      user=Depends(require_operator_or_admin)):
+    try:
+        prefs = Preferences.model_validate_json(preferences)
+    except ValidationError as exc:
+        raise HTTPException(422, "Invalid consultation preferences") from exc
+    return suggest(await read_image(selfie), prefs)
+
+
 @router.post("", response_model=GenerateResponse, status_code=202)
 async def submit_job(
     selfie: Annotated[UploadFile, File()],
-    hairstyle_id: Annotated[int, Form()],
+    hairstyle_id: Annotated[int | None, Form()] = None,
+    mode: Annotated[Literal["reference", "suggest"], Form()] = "reference",
+    cut: Annotated[str, Form(max_length=1200)] = "",
     colour: Annotated[str, Form(max_length=64)] = "original",
     user=Depends(require_operator_or_admin),
 ):
-    style = catalogue.get(hairstyle_id)
-    if style is None:
-        raise HTTPException(404, "Hairstyle not found")
-    reference = encoded(catalogue.path(style, prepared=True).read_bytes())
-    brief = "Copy only the haircut, texture and silhouette in image 2."
+    reference = None
+    if mode == "reference":
+        style = catalogue.get(hairstyle_id) if hairstyle_id is not None else None
+        if style is None:
+            raise HTTPException(404, "Select a catalogue haircut")
+        reference = encoded(catalogue.path(style, prepared=True).read_bytes())
+        brief = "Copy only the haircut, texture and silhouette in image 2."
+    else:
+        if hairstyle_id is not None or not cut.strip() or colour == "reference":
+            raise HTTPException(422, "Select a suggested cut and a selfie-compatible colour")
+        brief = "Apply this haircut: " + cut.strip()
     colour = {"original": "keep the colour from image 1", "reference": "match image 2"}.get(colour, colour)
     image = await read_image(selfie)
     try:

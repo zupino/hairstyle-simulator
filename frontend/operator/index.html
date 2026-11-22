@@ -167,6 +167,11 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .hidden { display: none !important; }
+  .controls {margin:12px auto; max-width:1000px; display:flex; flex-wrap:wrap; gap:14px; align-items:center}
+    .controls label {display:grid;gap:4px}.controls select,.controls input,.controls textarea {padding:7px;font:inherit}
+    #brief-label,#options,#observation {width:100%} #options label {display:block;margin:8px 0}
+    [hidden] {display:none!important} #comparisons {display:flex; flex-wrap:wrap;gap:12px} #comparisons figure {margin:0;max-width:190px}
+    #comparisons img {width:100%}
   </style>
 </head>
 <body>
@@ -196,6 +201,22 @@
     <button id="logout-btn">Sign out</button>
   </header>
 
+  <section class="card controls">
+    <label>Consultation <select id="mode"><option value="reference">Try a style</option><option value="suggest">Suggest a cut</option></select></label>
+    <label>Hair colour <select id="colour"><option value="original">Keep current colour</option><option value="reference">Match reference</option><option>Cool chestnut</option><option>Copper</option><option>Honey blonde</option><option>Espresso</option><option>Silver</option><option value="custom">Custom shade…</option></select></label>
+    <input id="shade" maxlength="64" placeholder="Describe the shade" aria-label="Custom shade" hidden>
+  </section>
+  <section id="consult" class="card controls" hidden>
+    <h2>Find two ideas</h2>
+    <label>Length <select id="length"><option value="unsure">I'm not sure</option><option value="preserve">Keep my length</option><option value="tie">Keep a ponytail</option><option value="short">Go short</option></select></label>
+    <label>Visual effect <select id="effect"><option value="unsure">Open to ideas</option><option value="elongate">Elongated outline</option><option value="fullness">Fuller around the cheeks</option><option value="polished">Polished and structured</option><option value="bold">Bold change</option></select></label>
+    <label>Daily styling <select id="effort"><option value="easy">Wash and go</option><option value="styled">Happy to style</option></select></label>
+    <label><input type="checkbox" id="clear"> Keep forehead clear</label>
+    <label>Anything else? <input id="note" maxlength="200" placeholder="Optional preference"></label>
+    <button class="btn btn-outline" id="ideas">Suggest two cuts</button>
+    <p id="observation" role="status"></p><div id="options"></div>
+    <label id="brief-label" hidden>Adjust selected cut <textarea id="brief" maxlength="1200" rows="3"></textarea></label>
+  </section>
   <div id="hairstyle-strip">
     <h2>Select hairstyle</h2>
     <div id="hairstyle-scroll">
@@ -221,7 +242,7 @@
         <!-- hidden canvas used only for capturing frames -->
         <canvas id="capture-canvas" style="display:none"></canvas>
         <div class="camera-actions">
-          <button class="btn btn-primary" id="capture-btn">Capture</button>
+          <button class="btn btn-primary" id="capture-btn">Capture</button> <label>Or upload a selfie <input id="selfie-file" type="file" accept="image/*"></label>
         </div>
         <!-- selfie strip: shown after first capture -->
         <div id="selfie-strip" class="hidden">
@@ -236,18 +257,18 @@
       <div class="card" style="margin-bottom:16px">
         <h2>Generate</h2>
         <p style="color:var(--muted);font-size:.9rem;margin-bottom:12px">
-          Capture a selfie and select a hairstyle, then click Generate.
+          Choose a selfie and haircut to preview.
         </p>
         <button class="btn btn-primary" id="generate-btn" disabled>Generate</button>
         <div id="status-bar"></div>
       </div>
 
       <div class="card" id="result-card">
-        <h2>Result</h2>
+        <h2>Result</h2><p id="look-description"></p><div id="comparisons"></div>
         <img id="result-img" src="" alt="Generated hairstyle" />
         <div class="result-actions">
           <a id="download-btn" class="btn btn-success" download="hairstyle-result.jpg">Save image</a>
-          <button class="btn btn-outline" id="new-session-btn">New session</button>
+          <button id="pin" class="btn btn-outline">Pin for comparison</button> <button class="btn btn-outline" id="new-session-btn">New session</button>
         </div>
       </div>
     </div>
@@ -265,6 +286,73 @@
   let selectedSelfieBlob = null;
   let selectedHairstyleId = null;
   let pollTimer = null;
+  const el = id => document.getElementById(id);
+  let revision = 0, session = 0, busy = false, look = '', lastSelfie = null;
+  function invalidate() {
+    revision++;
+    el('options').replaceChildren();
+    el('brief-label').hidden = true;
+    el('brief').value = '';
+    el('observation').textContent = '';
+    updateGenerateBtn();
+  }
+  function modeChanged() {
+    const suggesting = el('mode').value === 'suggest';
+    el('consult').hidden = !suggesting;
+    el('hairstyle-strip').hidden = suggesting;
+    el('colour').options[1].disabled = suggesting;
+    if (suggesting && el('colour').value === 'reference') el('colour').value = 'original';
+    invalidate();
+  }
+  el('mode').onchange = modeChanged;
+  for (const id of ['length','effect','effort','clear','note']) el(id).oninput = invalidate;
+  el('colour').onchange = () => { el('shade').hidden = el('colour').value !== 'custom'; updateGenerateBtn(); };
+  el('shade').oninput = el('brief').oninput = updateGenerateBtn;
+  el('ideas').onclick = async () => {
+    invalidate();
+    const current = revision;
+    const prefs = {length:el('length').value, effect:el('effect').value, effort:el('effort').value,
+                   forehead_clear:el('clear').checked, note:el('note').value};
+    const fd = new FormData();
+    fd.append('selfie', selectedSelfieBlob, 'selfie.jpg');
+    fd.append('preferences', JSON.stringify(prefs));
+    el('observation').textContent = 'Looking at your photo…';
+    try {
+      const response = await api('POST','/api/generate/suggest',fd,true);
+      const data = await response.json();
+      if (current !== revision) return;
+      el('observation').textContent = data.observation;
+      for (const option of data.options) {
+        const label = document.createElement('label'), radio = document.createElement('input');
+        radio.type = 'radio'; radio.name = 'idea';
+        radio.onchange = () => { el('brief').value = option.brief; el('brief-label').hidden = false; updateGenerateBtn(); };
+        label.append(radio, ' ' + option.name + ' — ' + option.brief);
+        el('options').append(label);
+      }
+    } catch (e) { if (current === revision) el('observation').textContent = e.message; }
+  };
+  el('selfie-file').onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    capturedBlobs.push(file);
+    addSelfieThumb(file, capturedBlobs.length-1);
+    selectSelfie(capturedBlobs.length-1);
+    el('selfie-strip').classList.remove('hidden');
+  };
+  el('pin').onclick = () => {
+    const area = el('comparisons');
+    if (!area.children.length) {
+      const original = document.createElement('img');
+      original.src = URL.createObjectURL(lastSelfie); original.alt = 'Original selfie';
+      const fig = document.createElement('figure'); fig.append(original, 'Original selfie'); area.append(fig);
+    }
+    if (area.children.length >= 3) area.children[1].remove();
+    const fig = document.createElement('figure');
+    fig.append(el('result-img').cloneNode(false), look);
+    fig.firstChild.removeAttribute('id');
+    area.append(fig);
+    el('pin').disabled = true;
+  };
 
   // -----------------------------------------------------------------------
   // API
@@ -317,6 +405,7 @@
   }
 
   function logout() {
+    newSession();
     token = null;
     sessionStorage.removeItem('operator_token');
     stopPoll();
@@ -331,6 +420,7 @@
   function showApp() {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
+    updateGenerateBtn();
     startCamera();
     loadHairstyles();
   }
@@ -364,6 +454,7 @@
     const video = document.getElementById('video');
     const canvas = document.getElementById('capture-canvas');
     const side = Math.min(video.videoWidth, video.videoHeight);
+    if (!side) return;
     canvas.width = side;
     canvas.height = side;
     const ctx = canvas.getContext('2d');
@@ -394,7 +485,12 @@
   }
 
   function selectSelfie(index) {
+    if (selectedSelfieBlob !== capturedBlobs[index]) {
+      el('comparisons').replaceChildren();
+      el('result-card').style.display = 'none';
+    }
     selectedSelfieBlob = capturedBlobs[index];
+    invalidate();
     document.querySelectorAll('.selfie-thumb').forEach((t, i) => {
       t.classList.toggle('selected', i === index);
     });
@@ -453,7 +549,9 @@
   // Generate
   // -----------------------------------------------------------------------
   function updateGenerateBtn() {
-    document.getElementById('generate-btn').disabled = !(selectedSelfieBlob && selectedHairstyleId);
+    const cut = el('mode').value === 'reference' ? selectedHairstyleId : el('brief').value.trim();
+    el('ideas').disabled = !selectedSelfieBlob || busy;
+    el('generate-btn').disabled = busy || !selectedSelfieBlob || !cut || (el('colour').value === 'custom' && !el('shade').value.trim());
   }
 
   async function startGeneration() {
@@ -463,23 +561,35 @@
 
     const fd = new FormData();
     fd.append('selfie', selectedSelfieBlob, 'selfie.jpg');
-    fd.append('hairstyle_id', selectedHairstyleId);
+    busy = true;
+    const active = session;
+    lastSelfie = selectedSelfieBlob;
+    const mode = el('mode').value;
+    const colour = el('colour').value === 'custom' ? el('shade').value.trim() : el('colour').value;
+    fd.append('mode',mode);
+    fd.append('colour',colour);
+    if (mode === 'reference') fd.append('hairstyle_id', selectedHairstyleId);
+    else fd.append('cut', el('brief').value);
+    look = (mode === 'reference' ? document.querySelector('.hs-thumb.selected').textContent : el('brief').value)
+      + ' · ' + (el('colour').value === 'custom' ? colour : el('colour').selectedOptions[0].textContent);
 
     try {
       const res = await api('POST', '/api/generate', fd, true);
       const data = await res.json();
-      pollJob(data.job_id);
+      if (active === session) pollJob(data.job_id);
     } catch (err) {
-      setStatus('Error: ' + err.message, 'error');
-      document.getElementById('generate-btn').disabled = false;
+      if (active !== session) return;
+      setStatus('Error: ' + esc(err.message), 'error');
+      busy = false; updateGenerateBtn();
     }
   }
 
   function pollJob(jobId, attempt = 0) {
+    const active = session;
     const MAX_ATTEMPTS = 620; // ~2 minutes at 1s intervals
     if (attempt >= MAX_ATTEMPTS) {
       setStatus('Timed out waiting for result', 'error');
-      document.getElementById('generate-btn').disabled = false;
+      busy = false; updateGenerateBtn();
       return;
     }
     setStatus(`<span class="spinner"></span> Generating… (${attempt + 1})`, 'info');
@@ -488,6 +598,7 @@
         const res = await fetch('/api/generate/' + jobId, {
           headers: { 'Authorization': 'Bearer ' + token },
         });
+        if (active !== session) return;
         if (res.status === 202) {
           pollJob(jobId, attempt + 1);
           return;
@@ -498,10 +609,11 @@
         }
         // Got the image
         const blob = await res.blob();
-        showResult(blob);
+        if (active === session) showResult(blob);
       } catch (err) {
-        setStatus('Error: ' + err.message, 'error');
-        document.getElementById('generate-btn').disabled = false;
+        if (active !== session) return;
+      setStatus('Error: ' + esc(err.message), 'error');
+        busy = false; updateGenerateBtn();
       }
     }, 1000);
   }
@@ -515,15 +627,23 @@
     const url = URL.createObjectURL(blob);
     const img = document.getElementById('result-img');
     img.src = url;
+    el('look-description').textContent = look;
+    el('pin').disabled = false;
     const dlBtn = document.getElementById('download-btn');
     dlBtn.href = url;
     document.getElementById('result-card').style.display = 'block';
     setStatus('Done!', 'success');
-    document.getElementById('generate-btn').disabled = false;
+    busy = false; updateGenerateBtn();
   }
 
   function newSession() {
     stopPoll();
+    session++;
+    busy = false;
+    el('comparisons').replaceChildren();
+    for (const id of ['selfie-file','note','shade','brief']) el(id).value = '';
+    for (const id of ['colour','mode','length','effect','effort']) el(id).selectedIndex = 0;
+    el('shade').hidden = true; el('clear').checked = false; modeChanged();
     capturedBlobs = [];
     selectedSelfieBlob = null;
     selectedHairstyleId = null;
