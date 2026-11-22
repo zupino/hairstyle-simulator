@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv-hairstyle/
+venv/
+.venv/
+
+# Database
+*.db
+
+# Storage (uploaded hairstyles — tracked separately if needed)
+storage/hairstyles/*
+!storage/hairstyles/.gitkeep
+
+# Environment variables
+.env
+
+# Downloaded ML models (fetched automatically at runtime)
+models/*.tflite
+
+# OS
+.DS_Store
+
+# Temp intermediate mask image files
+tmp
